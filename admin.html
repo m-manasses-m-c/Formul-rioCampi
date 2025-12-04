@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistec - Admin</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    
+    <script src="js/config.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-100 text-slate-700">
+
+    <div id="adminApp" class="min-h-screen flex flex-col">
+
+        <!-- LOGIN VIEW -->
+        <div v-if="currentView === 'login'" class="flex-grow flex items-center justify-center p-4">
+            <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center">
+                <div class="w-12 h-12 bg-slate-900 rounded-lg flex items-center justify-center mx-auto mb-4 text-white"><i class="fa-solid fa-shield-halved"></i></div>
+                <h2 class="text-xl font-bold mb-6">Admin Console</h2>
+                <input v-model="adminPassword" type="password" @keyup.enter="checkLogin" placeholder="Senha" class="w-full px-4 py-3 border rounded-xl mb-4 focus:border-brand outline-none">
+                <button @click="checkLogin" class="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition">Entrar</button>
+                <p v-if="loginError" class="text-red-500 text-xs font-bold mt-4">Acesso Negado</p>
+            </div>
+        </div>
+
+        <!-- DASHBOARD VIEW -->
+        <div v-else-if="currentView === 'dashboard'" class="flex-grow">
+            
+            <!-- Navbar Admin -->
+            <nav class="bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-30 flex justify-between items-center">
+                <div class="font-display font-bold text-slate-800">Assistec <span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-xs ml-2">Admin</span></div>
+                
+                <!-- Tabs -->
+                <div class="flex bg-slate-100 p-1 rounded-lg">
+                    <button @click="adminTab='charts'; renderChart()" :class="adminTab==='charts'?'bg-white shadow text-brand':'text-slate-500'" class="px-4 py-1.5 rounded-md text-sm font-bold transition">Visão Geral</button>
+                    <button @click="adminTab='calendar'" :class="adminTab==='calendar'?'bg-white shadow text-brand':'text-slate-500'" class="px-4 py-1.5 rounded-md text-sm font-bold transition">Cronograma</button>
+                    <button @click="adminTab='access'" :class="adminTab==='access'?'bg-white shadow text-brand':'text-slate-500'" class="px-4 py-1.5 rounded-md text-sm font-bold transition">Acessos</button>
+                </div>
+
+                <div class="flex gap-2">
+                    <button @click="exportToExcel" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700 transition"><i class="fa-solid fa-file-excel mr-1"></i> Exportar</button>
+                    <button @click="logout" class="text-slate-400 hover:text-red-500 px-3"><i class="fa-solid fa-power-off"></i></button>
+                </div>
+            </nav>
+
+            <main class="container mx-auto px-4 py-8 max-w-6xl">
+
+                <!-- TAB: CHARTS -->
+                <div v-show="adminTab === 'charts'" class="space-y-6 animate-fade-in-up">
+                    <div class="grid grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <p class="text-xs text-slate-400 uppercase font-bold">Total ICTs</p>
+                            <p class="text-3xl font-display font-bold">{{ consolidatedData.length }}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <p class="text-xs text-slate-400 uppercase font-bold">Total Campi</p>
+                            <p class="text-3xl font-display font-bold">{{ totalCampiCount }}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <p class="text-xs text-slate-400 uppercase font-bold">Respostas</p>
+                            <p class="text-3xl font-display font-bold">{{ dbSubmissions.length }}</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-80">
+                        <canvas id="resultsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- TAB: CALENDAR (VISÃO GERAL + EDIÇÃO) -->
+                <div v-show="adminTab === 'calendar'" class="animate-fade-in-up">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-slate-700">Cronograma Unificado</h2>
+                        <button @click="fetchSchedules" class="text-brand text-xs font-bold hover:underline"><i class="fa-solid fa-rotate mr-1"></i> Atualizar</button>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="overflow-x-auto max-h-[600px]">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 text-xs text-slate-500 uppercase sticky top-0 shadow-sm z-10">
+                                    <tr>
+                                        <th class="px-6 py-3">ICT / Campus</th>
+                                        <th class="px-4 py-3 text-center bg-orange-50 text-orange-700">Recesso</th>
+                                        <th class="px-4 py-3 text-center bg-blue-50 text-blue-700">Férias</th>
+                                        <th class="px-4 py-3 text-right">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr v-for="sub in dbSubmissions" :key="sub.id" class="hover:bg-slate-50 group">
+                                        <td class="px-6 py-4 w-1/3">
+                                            <div class="font-bold text-slate-800">{{ sub.ict }}</div>
+                                            <div class="text-xs text-slate-400 mt-1">{{ sub.campi?.length || 0 }} Campi</div>
+                                        </td>
+                                        
+                                        <td colspan="2" class="px-4 py-2 align-top">
+                                            <div class="space-y-1 max-h-32 overflow-y-auto pr-2">
+                                                <div v-for="c in sub.campi" :key="c.id" class="flex justify-between text-xs border-b border-slate-100 pb-1 last:border-0">
+                                                    <span class="truncate w-1/3 font-medium text-slate-600">{{ c.name }}</span>
+                                                    
+                                                    <!-- Datas Formatadas -->
+                                                    <span class="w-1/3 text-center font-mono text-orange-600">
+                                                        {{ globalSchedules[c.id]?.recessStart ? formatDateBR(globalSchedules[c.id].recessStart) : '--' }}
+                                                        a
+                                                        {{ globalSchedules[c.id]?.recessEnd ? formatDateBR(globalSchedules[c.id].recessEnd) : '--' }}
+                                                    </span>
+                                                    <span class="w-1/3 text-center font-mono text-blue-600">
+                                                        {{ globalSchedules[c.id]?.vacStart ? formatDateBR(globalSchedules[c.id].vacStart) : '--' }}
+                                                        a
+                                                        {{ globalSchedules[c.id]?.vacEnd ? formatDateBR(globalSchedules[c.id].vacEnd) : '--' }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        
+                                        <td class="px-6 py-4 text-right align-middle">
+                                            <button @click="openEditModal(sub)" class="bg-white border border-slate-300 hover:border-brand hover:text-brand text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                                                <i class="fa-solid fa-pen"></i> Editar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: ACCESS (CHAVES) -->
+                <div v-show="adminTab === 'access'" class="animate-fade-in-up">
+                    <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-800 flex gap-3">
+                        <i class="fa-solid fa-info-circle mt-0.5"></i>
+                        <div>
+                            <strong>Gestão de Acessos:</strong>
+                            Gere a chave e envie para o representante. Ele acessará o portal usando apenas este código.
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-slate-50 text-xs text-slate-500 uppercase border-b border-slate-200">
+                                <tr>
+                                    <th class="px-6 py-3">ICT</th>
+                                    <th class="px-6 py-3">Responsável / Email</th>
+                                    <th class="px-6 py-3 text-center">Chave de Acesso</th>
+                                    <th class="px-6 py-3 text-right">Gerar</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr v-for="sub in dbSubmissions" :key="sub.id" class="hover:bg-slate-50">
+                                    <td class="px-6 py-4 font-medium">{{ sub.ict }}</td>
+                                    <td class="px-6 py-4">
+                                        <div class="font-bold text-slate-700">{{ sub.name }}</div>
+                                        <div class="text-xs text-slate-400">{{ sub.email }}</div>
+                                    </td>
+                                    <td class="px-6 py-4 text-center">
+                                        <div v-if="sub.access_key" class="inline-flex items-center gap-2 bg-slate-100 px-3 py-1 rounded border border-slate-200">
+                                            <span class="font-mono text-brand font-bold">{{ sub.access_key }}</span>
+                                            <button @click="copyToClipboard(sub.access_key)" class="text-slate-400 hover:text-slate-600"><i class="fa-regular fa-copy"></i></button>
+                                        </div>
+                                        <span v-else class="text-slate-300 text-xs italic">--</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-right">
+                                        <button @click="generateSmartKey(sub)" class="bg-slate-800 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                                            <i class="fa-solid fa-key mr-1"></i> {{ sub.access_key ? 'Regerar' : 'Criar Chave' }}
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+
+        <!-- MODAL: EDIÇÃO ADMIN -->
+        <transition name="fade">
+            <div v-if="showAdminEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-up">
+                    <div class="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">Editar Cronograma</h3>
+                            <p class="text-xs text-slate-500">Editando: {{ adminEditingIct?.ict }}</p>
+                        </div>
+                        <button @click="showAdminEditModal = false" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-times"></i></button>
+                    </div>
+                    
+                    <div class="p-8 overflow-y-auto flex-grow">
+                        <div class="bg-yellow-50 text-yellow-800 p-3 rounded-lg text-sm mb-4 border border-yellow-100">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> Você está editando como Administrador. As alterações sobrescrevem os dados do usuário.
+                        </div>
+
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-500 uppercase bg-slate-100">
+                                <tr>
+                                    <th class="px-4 py-2">Campus</th>
+                                    <th class="px-2 py-2 text-center">Recesso (Ini/Fim)</th>
+                                    <th class="px-2 py-2 text-center">Férias (Ini/Fim)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="campus in adminEditingIct?.campi" :key="campus.id" class="border-b last:border-0">
+                                    <td class="px-4 py-3 font-medium">{{ campus.name }}</td>
+                                    <td class="px-2 py-3 bg-orange-50/10 text-center">
+                                        <div class="flex gap-1 justify-center">
+                                            <input type="date" v-model="editSchedules[campus.id].recessStart" class="w-28 p-1 text-xs border rounded">
+                                            <input type="date" v-model="editSchedules[campus.id].recessEnd" class="w-28 p-1 text-xs border rounded">
+                                        </div>
+                                    </td>
+                                    <td class="px-2 py-3 bg-blue-50/10 text-center">
+                                        <div class="flex gap-1 justify-center">
+                                            <input type="date" v-model="editSchedules[campus.id].vacStart" class="w-28 p-1 text-xs border rounded">
+                                            <input type="date" v-model="editSchedules[campus.id].vacEnd" class="w-28 p-1 text-xs border rounded">
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="px-8 py-5 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-end gap-3">
+                        <button @click="showAdminEditModal = false" class="px-5 py-2 rounded-lg text-slate-500 font-bold hover:bg-slate-200">Cancelar</button>
+                        <button @click="saveAdminEdits" class="px-6 py-2 bg-brand hover:bg-brandDark text-white rounded-lg font-bold shadow-lg transition">
+                            <i class="fa-solid fa-save"></i> Salvar Edição
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+    </div>
+    <script src="js/admin.js"></script>
+</body>
+</html>
