@@ -1,27 +1,12 @@
-tailwind.config = {
-    darkMode: 'class', 
-    theme: {
-        extend: {
-            fontFamily: {
-                sans: ['Inter', 'sans-serif'],
-                display: ['Outfit', 'sans-serif'],
-            },
-            colors: {
-                primary: '#1e293b',    // Slate 800
-                brand: '#4f46e5',      // Indigo 600
-                brandLight: '#818cf8', // Indigo 400
-                accent: '#06b6d4',     // Cyan 500
-            },
-            animation: {
-                'fade-in-up': 'fadeInUp 0.5s ease-out',
-                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            },
-            keyframes: {
-                fadeInUp: {
-                    '0%': { opacity: '0', transform: 'translateY(10px)' },
-                    '100%': { opacity: '1', transform: 'translateY(0)' },
-                }
-            }
-        }
-    }
-}
+const SUPABASE_URL = 'https://vfnnznnjvlewrbfczczw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZmbm56bm5qdmxld3JiZmN6Y3p3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MTEyNDIsImV4cCI6MjA4MDE4NzI0Mn0.wwsfhzjauqM7V0VB93-TKH8-mVN11mBukhSFUlSHgtU';
+
+window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Função utilitária global (usada no Admin e no Portal)
+window.formatDateBR = (isoDate) => {
+    if (!isoDate) return '-';
+    const parts = isoDate.split('-');
+    if (parts.length !== 3) return isoDate;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
