@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistec - Portal do Parceiro</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    
+    <script src="js/config.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-100 text-slate-700 font-sans">
+
+    <div id="portalApp" class="min-h-screen flex flex-col">
+        
+        <!-- Navbar Minimalista -->
+        <nav class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-shapes text-brand text-lg"></i>
+                <span class="font-display font-bold text-slate-800">Assistec <span class="text-slate-400 font-normal">| Parceiro</span></span>
+            </div>
+            <a v-if="currentView === 'login'" href="index.html" class="text-sm font-medium text-slate-500 hover:text-brand">Voltar ao site</a>
+            <button v-if="currentView === 'dashboard'" @click="logout" class="text-sm text-red-500 hover:text-red-700 font-bold flex items-center gap-2">
+                <i class="fa-solid fa-power-off"></i> Sair
+            </button>
+        </nav>
+
+        <main class="flex-grow container mx-auto px-4 py-8 relative">
+
+            <!-- VIEW: Login -->
+            <div v-if="currentView === 'login'" class="max-w-md mx-auto mt-12 animate-fade-in-up">
+                <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+                    <div class="bg-slate-900 p-8 text-center relative">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-brand rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
+                        <i class="fa-solid fa-key text-4xl text-white/90 mb-4"></i>
+                        <h2 class="text-xl font-bold text-white">Acesso Restrito</h2>
+                        <p class="text-slate-400 text-sm mt-1">Utilize sua chave institucional</p>
+                    </div>
+                    
+                    <form @submit.prevent="loginWithKey" class="p-8 space-y-6">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Chave de Acesso</label>
+                            <input v-model="accessKey" type="text" placeholder="Ex: IFSP-A1B2" class="w-full text-center text-lg font-mono uppercase tracking-widest px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none transition" required>
+                            <p v-if="loginError" class="text-red-500 text-xs mt-2 text-center font-bold"><i class="fa-solid fa-circle-exclamation"></i> Chave não encontrada.</p>
+                        </div>
+                        <button type="submit" :disabled="loading" class="w-full bg-brand hover:bg-brandDark text-white font-bold py-3 rounded-xl shadow-lg shadow-brand/20 transition">
+                            <span v-if="loading">Verificando...</span>
+                            <span v-else>Entrar</span>
+                        </button>
+                    </form>
+                </div>
+                <div class="text-center mt-6 text-xs text-slate-400">
+                    Não tem a chave? Contate a administração do programa.
+                </div>
+            </div>
+
+            <!-- VIEW: Dashboard -->
+            <div v-else-if="currentView === 'dashboard'" class="animate-fade-in-up">
+                
+                <header class="mb-8">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Logado</span>
+                    </div>
+                    <h1 class="text-2xl md:text-3xl font-display font-bold text-slate-900">{{ currentUser.ict }}</h1>
+                    <p class="text-slate-500">Representante: {{ currentUser.name }}</p>
+                </header>
+
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <!-- Sidebar -->
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="p-3 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-400 uppercase">Menu</div>
+                            <a href="#" class="block px-4 py-3 bg-brand/5 text-brand font-bold border-l-4 border-brand text-sm">
+                                <i class="fa-regular fa-calendar-check mr-2"></i> Cronograma
+                            </a>
+                            <a href="#" class="block px-4 py-3 text-slate-400 hover:bg-slate-50 text-sm cursor-not-allowed">
+                                <i class="fa-solid fa-chart-line mr-2"></i> Relatórios (Em breve)
+                            </a>
+                        </div>
+                        <div class="bg-blue-50 text-blue-800 p-4 rounded-xl text-xs border border-blue-100 leading-relaxed">
+                            <strong>Atenção:</strong> Preencha as datas de recesso e férias de cada campus para garantir o alinhamento das atividades.
+                        </div>
+                    </div>
+
+                    <!-- Main Area -->
+                    <div class="lg:col-span-3">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                <h3 class="font-bold text-slate-700">Datas por Campus</h3>
+                                <button @click="saveSchedules" :disabled="saving" class="bg-slate-800 hover:bg-black text-white px-5 py-2 rounded-lg text-sm font-bold shadow-lg shadow-slate-900/10 transition flex items-center gap-2">
+                                    <span v-if="saving"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+                                    <span v-else><i class="fa-solid fa-save"></i> Salvar</span>
+                                </button>
+                            </div>
+                            
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm text-left">
+                                    <thead class="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
+                                        <tr>
+                                            <th class="px-4 py-3 w-1/3">Campus</th>
+                                            <th class="px-2 py-3 text-center bg-orange-50 text-orange-700">Recesso (Início - Fim)</th>
+                                            <th class="px-2 py-3 text-center bg-blue-50 text-blue-700">Férias (Início - Fim)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <!-- Ferramentas de Replicação -->
+                                        <tr class="bg-slate-50/50">
+                                            <td class="px-4 py-2 text-right text-xs font-bold text-slate-400">
+                                                Replicar 1º campus para todos <i class="fa-solid fa-arrow-right ml-1"></i>
+                                            </td>
+                                            <td class="px-2 py-2 text-center">
+                                                <button @click="replicateDate('recessStart'); replicateDate('recessEnd')" class="text-[10px] bg-white border border-slate-300 hover:border-brand hover:text-brand px-2 py-1 rounded transition">Aplicar Recesso</button>
+                                            </td>
+                                            <td class="px-2 py-2 text-center">
+                                                <button @click="replicateDate('vacStart'); replicateDate('vacEnd')" class="text-[10px] bg-white border border-slate-300 hover:border-brand hover:text-brand px-2 py-1 rounded transition">Aplicar Férias</button>
+                                            </td>
+                                        </tr>
+
+                                        <tr v-for="campus in currentUser.campi" :key="campus.id" class="hover:bg-slate-50">
+                                            <td class="px-4 py-4 font-medium text-slate-800">{{ campus.name }}</td>
+                                            
+                                            <!-- Inputs Recesso -->
+                                            <td class="px-2 py-4 bg-orange-50/10">
+                                                <div class="flex flex-col items-center gap-2">
+                                                    <div class="flex gap-1">
+                                                        <input type="date" v-model="userSchedules[campus.id].recessStart" class="w-32 p-1.5 text-xs border rounded focus:border-brand outline-none">
+                                                        <input type="date" v-model="userSchedules[campus.id].recessEnd" class="w-32 p-1.5 text-xs border rounded focus:border-brand outline-none">
+                                                    </div>
+                                                    <div class="text-[10px] font-mono text-slate-400">
+                                                        {{ formatDateBR(userSchedules[campus.id].recessStart) }} até {{ formatDateBR(userSchedules[campus.id].recessEnd) }}
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <!-- Inputs Férias -->
+                                            <td class="px-2 py-4 bg-blue-50/10">
+                                                <div
